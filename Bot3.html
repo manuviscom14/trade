@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F&O Trading Signal Generator - Live Market Data</title>
+    <title>F&O Trading Signal Generator - Real Live Market Data</title>
     <style>
         * {
             margin: 0;
@@ -83,6 +83,11 @@
         .index-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .index-card.market-closed {
+            opacity: 0.7;
+            filter: grayscale(30%);
         }
 
         .index-header {
@@ -219,6 +224,12 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
 
+        .trade-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .btn-call {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white;
@@ -253,6 +264,75 @@
             font-style: italic;
         }
 
+        .market-closed-banner {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-weight: bold;
+            margin: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .market-closed-banner h2 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+
+        .market-timings {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #1e3c72;
+        }
+
+        .market-timings h3 {
+            color: #1e3c72;
+            margin-bottom: 15px;
+        }
+
+        .timing-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .timing-row:last-child {
+            border-bottom: none;
+        }
+
+        .countdown {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #1e3c72;
+            margin-top: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1e3c72;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -273,6 +353,15 @@
             margin-right: 5px;
         }
 
+        .paused-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #ef4444;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.6; transform: scale(1.2); }
@@ -286,70 +375,380 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+
+        .api-status {
+            padding: 10px;
+            margin: 10px 20px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        .api-success {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .api-error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🚀 Real-Time F&O Trading Signal Generator</h1>
-            <p><span class="live-indicator"></span>Live Analysis for Nifty 50, Bank Nifty & Sensex</p>
+            <p id="headerStatus">
+                <span class="live-indicator"></span>Fetching Live Market Data...
+            </p>
         </div>
 
         <div class="status-bar">
             <div class="status-item">
                 <div class="status-label">Auto Refresh</div>
-                <div class="status-value blink" id="autoRefresh">🔄 30s</div>
+                <div class="status-value" id="autoRefresh">🔄 30s</div>
             </div>
             <div class="status-item">
                 <div class="status-label">Market Status</div>
-                <div class="status-value" id="marketStatus">🟢 LIVE</div>
+                <div class="status-value" id="marketStatus">Checking...</div>
             </div>
             <div class="status-item">
                 <div class="status-label">Signal Strength</div>
                 <div class="status-value" id="signalStrength">-</div>
             </div>
             <div class="status-item">
-                <div class="status-label">Data Source</div>
-                <div class="status-value" style="font-size: 0.9em;">Live Sim</div>
+                <div class="status-label">IST Time</div>
+                <div class="status-value" id="currentTime">--:--</div>
             </div>
         </div>
 
+        <div id="apiStatus"></div>
+        <div id="marketClosedNotice"></div>
+
         <div class="main-content" id="mainContent">
-            <!-- Cards will be inserted here -->
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <p>Connecting to live market data feeds...</p>
+                <p style="font-size: 0.9em; margin-top: 10px; color: #999;">Fetching real-time prices from NSE/BSE</p>
+            </div>
         </div>
 
         <div class="last-update" id="lastUpdate">
-            <span class="live-indicator"></span> Live data updating...
+            <span class="live-indicator"></span> Connecting...
         </div>
     </div>
 
     <script>
-        // Configuration
         const CONFIG = {
-            refreshInterval: 2000,
+            refreshInterval: 30000,
             maxBudget: 5000,
+            apiTimeout: 10000
         };
 
-        // Base prices - will be updated with realistic market movements
-        const basePrices = {
-            NIFTY: 26141.95,
-            BANKNIFTY: 56000.00,
-            SENSEX: 87000.00
+        const MARKET_CONFIG = {
+            openHour: 9,
+            openMinute: 15,
+            closeHour: 15,
+            closeMinute: 30
         };
 
-        // Historical data storage
         const historicalData = {
-            NIFTY: [26141.95],
-            BANKNIFTY: [56000.00],
-            SENSEX: [87000.00]
+            NIFTY: [],
+            BANKNIFTY: [],
+            SENSEX: []
         };
 
-        // Market trend tracking
-        const marketTrend = {
-            NIFTY: 0,
-            BANKNIFTY: 0,
-            SENSEX: 0
-        };
+        let isMarketOpen = false;
+        let refreshTimer = null;
+        let lastFetchSuccess = false;
+
+        // Get IST time
+        function getISTTime() {
+            const now = new Date();
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const istOffset = 5.5 * 60 * 60 * 1000;
+            return new Date(utc + istOffset);
+        }
+
+        // Check market hours
+        function checkMarketHours() {
+            const istTime = getISTTime();
+            const hours = istTime.getHours();
+            const minutes = istTime.getMinutes();
+            const day = istTime.getDay();
+            
+            if (day === 0 || day === 6) {
+                return { isOpen: false, reason: 'Weekend', nextOpen: getNextMarketOpen(istTime) };
+            }
+            
+            const currentMinutes = hours * 60 + minutes;
+            const marketOpenMinutes = MARKET_CONFIG.openHour * 60 + MARKET_CONFIG.openMinute;
+            const marketCloseMinutes = MARKET_CONFIG.closeHour * 60 + MARKET_CONFIG.closeMinute;
+            
+            if (currentMinutes >= marketOpenMinutes && currentMinutes <= marketCloseMinutes) {
+                return { isOpen: true, reason: 'Market Open', nextOpen: null };
+            } else if (currentMinutes < marketOpenMinutes) {
+                return { isOpen: false, reason: 'Pre-Market', nextOpen: getNextMarketOpen(istTime) };
+            } else {
+                return { isOpen: false, reason: 'Market Closed', nextOpen: getNextMarketOpen(istTime) };
+            }
+        }
+
+        function getNextMarketOpen(currentTime) {
+            const nextOpen = new Date(currentTime);
+            const day = nextOpen.getDay();
+            
+            if (day === 6) {
+                nextOpen.setDate(nextOpen.getDate() + 2);
+            } else if (day === 0) {
+                nextOpen.setDate(nextOpen.getDate() + 1);
+            } else if (nextOpen.getHours() >= MARKET_CONFIG.closeHour) {
+                nextOpen.setDate(nextOpen.getDate() + 1);
+            }
+            
+            nextOpen.setHours(MARKET_CONFIG.openHour, MARKET_CONFIG.openMinute, 0, 0);
+            return nextOpen;
+        }
+
+        function formatTimeRemaining(targetTime) {
+            const now = getISTTime();
+            const diff = targetTime - now;
+            
+            if (diff <= 0) return 'Opening soon...';
+            
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            if (hours > 24) {
+                const days = Math.floor(hours / 24);
+                return `${days} day${days > 1 ? 's' : ''} ${hours % 24}h`;
+            }
+            
+            return `${hours}h ${minutes}m ${seconds}s`;
+        }
+
+        // Fetch REAL live data from multiple sources
+        async function fetchRealMarketData() {
+            const methods = [
+                fetchFromNSEIndia,
+                fetchFromYahooFinance,
+                fetchFromGoogleFinance,
+                fetchFromRapidAPI
+            ];
+
+            for (const method of methods) {
+                try {
+                    console.log(`Trying ${method.name}...`);
+                    const data = await method();
+                    if (data && Object.keys(data).length > 0) {
+                        console.log(`✅ Success with ${method.name}`);
+                        lastFetchSuccess = true;
+                        updateAPIStatus(true, method.name);
+                        return data;
+                    }
+                } catch (error) {
+                    console.error(`❌ ${method.name} failed:`, error.message);
+                }
+            }
+
+            lastFetchSuccess = false;
+            updateAPIStatus(false, 'All APIs');
+            return null;
+        }
+
+        // Method 1: NSE India Official
+        async function fetchFromNSEIndia() {
+            const response = await fetch('https://www.nseindia.com/api/allIndices', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0'
+                }
+            });
+
+            if (!response.ok) throw new Error('NSE API failed');
+            
+            const json = await response.json();
+            const marketData = {};
+
+            json.data.forEach(index => {
+                if (index.index === 'NIFTY 50') {
+                    marketData.NIFTY = parseNSEData(index);
+                } else if (index.index === 'NIFTY BANK') {
+                    marketData.BANKNIFTY = parseNSEData(index);
+                }
+            });
+
+            // Fetch Sensex from BSE
+            marketData.SENSEX = await fetchSensexFromBSE();
+            
+            return marketData;
+        }
+
+        // Method 2: Yahoo Finance (Most Reliable)
+        async function fetchFromYahooFinance() {
+            const symbols = {
+                'NIFTY': '^NSEI',
+                'BANKNIFTY': '^NSEBANK',
+                'SENSEX': '^BSESN'
+            };
+
+            const marketData = {};
+
+            for (const [key, symbol] of Object.entries(symbols)) {
+                try {
+                    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    const quote = data.chart.result[0];
+                    const meta = quote.meta;
+                    const indicators = quote.indicators.quote[0];
+                    const timestamps = quote.timestamp;
+                    
+                    const current = meta.regularMarketPrice;
+                    const previous = meta.previousClose;
+                    const open = indicators.open[0];
+                    const high = Math.max(...indicators.high.filter(h => h !== null));
+                    const low = Math.min(...indicators.low.filter(l => l !== null));
+
+                    marketData[key] = {
+                        price: parseFloat(current.toFixed(2)),
+                        change: parseFloat((current - previous).toFixed(2)),
+                        changePercent: parseFloat((((current - previous) / previous) * 100).toFixed(2)),
+                        high: parseFloat(high.toFixed(2)),
+                        low: parseFloat(low.toFixed(2)),
+                        open: parseFloat(open.toFixed(2)),
+                        previousClose: parseFloat(previous.toFixed(2)),
+                        timestamp: new Date(timestamps[timestamps.length - 1] * 1000)
+                    };
+                } catch (e) {
+                    console.error(`Failed to fetch ${key}:`, e);
+                }
+            }
+
+            if (Object.keys(marketData).length === 0) throw new Error('No data fetched');
+            return marketData;
+        }
+
+        // Method 3: Google Finance
+        async function fetchFromGoogleFinance() {
+            const symbols = {
+                'NIFTY': 'NIFTY_50',
+                'BANKNIFTY': 'NIFTY_BANK',
+                'SENSEX': 'SENSEX'
+            };
+
+            // Google Finance doesn't have a direct API, would need scraping
+            throw new Error('Google Finance method not implemented');
+        }
+
+        // Method 4: RapidAPI (Backup)
+        async function fetchFromRapidAPI() {
+            // This would require an API key
+            // Free tier available at rapidapi.com
+            throw new Error('RapidAPI requires API key');
+        }
+
+        async function fetchSensexFromBSE() {
+            try {
+                // BSE API endpoint
+                const response = await fetch('https://api.bseindia.com/BseIndiaAPI/api/DefaultData/w');
+                const data = await response.json();
+                
+                const sensex = data.Table.find(item => item.IndxNm === 'Sensex');
+                if (sensex) {
+                    return {
+                        price: parseFloat(sensex.CurrRate),
+                        change: parseFloat(sensex.Change),
+                        changePercent: parseFloat(sensex.PerChange),
+                        high: parseFloat(sensex.High),
+                        low: parseFloat(sensex.Low),
+                        open: parseFloat(sensex.Open),
+                        previousClose: parseFloat(sensex.PrevClose)
+                    };
+                }
+            } catch (e) {
+                console.error('BSE fetch failed:', e);
+            }
+            return null;
+        }
+
+        function parseNSEData(index) {
+            return {
+                price: parseFloat(index.last),
+                change: parseFloat(index.change),
+                changePercent: parseFloat(index.pChange),
+                high: parseFloat(index.high || index.last),
+                low: parseFloat(index.low || index.last),
+                open: parseFloat(index.open || index.last),
+                previousClose: parseFloat(index.previousClose || index.last)
+            };
+        }
+
+        function updateAPIStatus(success, source) {
+            const statusDiv = document.getElementById('apiStatus');
+            if (success) {
+                statusDiv.innerHTML = `<div class="api-status api-success">✅ Connected to ${source} - Real-time data active</div>`;
+            } else {
+                statusDiv.innerHTML = `<div class="api-status api-error">⚠️ Unable to fetch live data from ${source}. Retrying...</div>`;
+            }
+        }
+
+        function displayMarketClosedNotice(marketInfo) {
+            const notice = document.getElementById('marketClosedNotice');
+            
+            if (!marketInfo.isOpen) {
+                const timeRemaining = marketInfo.nextOpen ? formatTimeRemaining(marketInfo.nextOpen) : '';
+                
+                notice.innerHTML = `
+                    <div class="market-closed-banner">
+                        <h2>🔴 Market is Currently ${marketInfo.reason}</h2>
+                        <p style="font-size: 1.1em; margin-top: 10px;">
+                            Trading hours: Monday-Friday, 9:15 AM - 3:30 PM IST
+                        </p>
+                        ${marketInfo.nextOpen ? `
+                            <div class="countdown">
+                                Market opens in: <span id="countdownTimer">${timeRemaining}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="market-timings">
+                        <h3>📅 Indian Stock Market Timings (IST)</h3>
+                        <div class="timing-row">
+                            <span style="color: #666;">Pre-Market:</span>
+                            <span style="font-weight: bold;">9:00 AM - 9:15 AM</span>
+                        </div>
+                        <div class="timing-row">
+                            <span style="color: #666;">Regular Session:</span>
+                            <span style="font-weight: bold; color: #10b981;">9:15 AM - 3:30 PM</span>
+                        </div>
+                        <div class="timing-row">
+                            <span style="color: #666;">Post-Market:</span>
+                            <span style="font-weight: bold;">3:30 PM - 4:00 PM</span>
+                        </div>
+                        <div class="timing-row">
+                            <span style="color: #666;">Trading Days:</span>
+                            <span style="font-weight: bold;">Monday - Friday (except holidays)</span>
+                        </div>
+                    </div>
+                `;
+                
+                if (marketInfo.nextOpen) {
+                    setInterval(() => {
+                        const timer = document.getElementById('countdownTimer');
+                        if (timer) {
+                            timer.textContent = formatTimeRemaining(marketInfo.nextOpen);
+                        }
+                    }, 1000);
+                }
+            } else {
+                notice.innerHTML = '';
+            }
+        }
 
         // Technical Analysis Functions
         function calculateRSI(prices, period = 14) {
@@ -360,30 +759,22 @@
             
             for (let i = prices.length - period; i < prices.length; i++) {
                 const difference = prices[i] - prices[i - 1];
-                if (difference >= 0) {
-                    gains += difference;
-                } else {
-                    losses -= difference;
-                }
+                if (difference >= 0) gains += difference;
+                else losses -= difference;
             }
             
             const avgGain = gains / period;
             const avgLoss = losses / period;
-            
             if (avgLoss === 0) return 100;
             
             const rs = avgGain / avgLoss;
-            const rsi = 100 - (100 / (1 + rs));
-            
-            return rsi.toFixed(2);
+            return (100 - (100 / (1 + rs))).toFixed(2);
         }
 
         function calculateMovingAverage(prices, period) {
             if (prices.length < period) return prices[prices.length - 1] || 0;
-            
             const slice = prices.slice(-period);
-            const sum = slice.reduce((a, b) => a + b, 0);
-            return (sum / period).toFixed(2);
+            return (slice.reduce((a, b) => a + b, 0) / period).toFixed(2);
         }
 
         function calculateVolatility(prices) {
@@ -395,8 +786,7 @@
             }
             
             const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-            const squaredDiffs = returns.map(r => Math.pow(r - mean, 2));
-            const variance = squaredDiffs.reduce((a, b) => a + b, 0) / returns.length;
+            const variance = returns.map(r => Math.pow(r - mean, 2)).reduce((a, b) => a + b, 0) / returns.length;
             
             return (Math.sqrt(variance) * 100).toFixed(2);
         }
@@ -415,7 +805,6 @@
             let strength = 0;
             let reason = [];
             
-            // RSI based signals
             if (rsi < 30) {
                 signal = 'CALL';
                 strength += 35;
@@ -434,7 +823,6 @@
                 reason.push('RSI Bearish');
             }
             
-            // Moving Average Crossover
             if (ma5 > ma20 && currentPrice > ma5) {
                 if (signal === 'CALL') strength += 25;
                 else if (signal === 'NEUTRAL') {
@@ -451,7 +839,6 @@
                 reason.push('📉 Bearish Cross');
             }
             
-            // Trend momentum
             if (change > 1) {
                 if (signal === 'CALL') strength += 20;
                 reason.push('🚀 Strong Up');
@@ -466,12 +853,10 @@
                 reason.push('Negative');
             }
             
-            // Day high/low proximity
             if (data.high && data.low) {
                 const range = data.high - data.low;
                 if (range > 0) {
                     const positionInRange = (currentPrice - data.low) / range;
-                    
                     if (positionInRange < 0.2) {
                         if (signal === 'CALL') strength += 15;
                         reason.push('Near Low');
@@ -482,7 +867,6 @@
                 }
             }
             
-            // Volatility
             if (volatility > 2) {
                 strength += 5;
                 reason.push('High Vol');
@@ -497,63 +881,6 @@
                 volatility,
                 reason: reason.join(' | ') || 'Analyzing...'
             };
-        }
-
-        // Generate realistic live market data
-        function generateLiveMarketData() {
-            const marketData = {};
-            
-            const indices = {
-                NIFTY: { volatility: 0.0003, correlation: 1 },
-                BANKNIFTY: { volatility: 0.0005, correlation: 0.85 },
-                SENSEX: { volatility: 0.00035, correlation: 0.95 }
-            };
-            
-            const marketShock = (Math.random() - 0.5) * 0.002;
-            
-            Object.entries(indices).forEach(([name, config]) => {
-                // Trend persistence
-                marketTrend[name] = marketTrend[name] * 0.9 + (Math.random() - 0.5) * 0.001;
-                
-                // Price movement
-                const randomMove = (Math.random() - 0.5) * config.volatility * 2;
-                const correlatedMove = marketShock * config.correlation;
-                const trendMove = marketTrend[name];
-                
-                const totalMove = randomMove + correlatedMove + trendMove;
-                
-                // Update base price
-                basePrices[name] = basePrices[name] * (1 + totalMove);
-                
-                const currentPrice = basePrices[name];
-                const previousClose = historicalData[name][0]; // Use initial as previous close
-                const change = currentPrice - previousClose;
-                const changePercent = (change / previousClose) * 100;
-                
-                // Generate OHLC
-                const volatilityRange = currentPrice * config.volatility * 2;
-                const high = currentPrice + Math.random() * volatilityRange;
-                const low = currentPrice - Math.random() * volatilityRange;
-                const open = low + (high - low) * Math.random();
-                
-                // Store in historical data
-                historicalData[name].push(currentPrice);
-                if (historicalData[name].length > 100) {
-                    historicalData[name].shift();
-                }
-                
-                marketData[name] = {
-                    price: parseFloat(currentPrice.toFixed(2)),
-                    change: parseFloat(change.toFixed(2)),
-                    changePercent: parseFloat(changePercent.toFixed(2)),
-                    high: parseFloat(high.toFixed(2)),
-                    low: parseFloat(low.toFixed(2)),
-                    open: parseFloat(open.toFixed(2)),
-                    previousClose: parseFloat(previousClose.toFixed(2))
-                };
-            });
-            
-            return marketData;
         }
 
         function estimateOptionPremium(indexName, signal, strikePrice, spotPrice) {
@@ -588,7 +915,7 @@
             };
         }
 
-        function renderIndexCard(indexName, data) {
+        function renderIndexCard(indexName, data, marketInfo) {
             const analysis = generateTradingSignal(data, indexName);
             const signalClass = analysis.signal === 'CALL' ? 'signal-buy' : 
                                analysis.signal === 'PUT' ? 'signal-sell' : 'signal-neutral';
@@ -603,8 +930,11 @@
             const lotInfo = calculateLotSize(indexName, premium);
             const totalCost = premium * lotInfo.lots * lotInfo.lotSize;
             
+            const cardClass = marketInfo.isOpen ? '' : 'market-closed';
+            const buttonDisabled = !marketInfo.isOpen ? 'disabled' : '';
+            
             return `
-                <div class="index-card">
+                <div class="index-card ${cardClass}">
                     <div class="index-header">
                         <div class="index-name">${indexName}</div>
                         <div class="change ${changeClass}">
@@ -699,26 +1029,38 @@
                         </div>
                         
                         <button class="trade-button ${analysis.signal === 'CALL' ? 'btn-call' : 'btn-put'}" 
-                                onclick="openGroww('${indexName}', '${analysis.signal}', ${strikePrice}, ${premium}, ${lotInfo.lots}, ${lotInfo.lotSize})">
-                            🚀 Execute Trade on Groww
+                                ${buttonDisabled}
+                                onclick="openGroww('${indexName}', '${analysis.signal}', ${strikePrice}, ${premium}, ${lotInfo.lots}, ${lotInfo.lotSize}, ${marketInfo.isOpen})">
+                            ${marketInfo.isOpen ? '🚀 Execute Trade on Groww' : '🔒 Market Closed'}
                         </button>
                         <div class="premium-info">
-                            ⚠️ Premium estimated. Verify on Groww before trading.
+                            ${marketInfo.isOpen ? 
+                                '⚠️ Premium estimated. Verify on Groww before trading.' :
+                                '⏰ Trading available during market hours (9:15 AM - 3:30 PM IST)'
+                            }
                         </div>
                     ` : `
                         <div class="premium-info">
-                            💡 No strong signal. Wait for better entry.
+                            💡 No strong signal. ${marketInfo.isOpen ? 'Wait for better entry.' : 'Market is closed.'}
                         </div>
                     `}
                     
                     <div class="data-source">
-                        <span class="live-indicator"></span> Real-time simulation
+                        ${marketInfo.isOpen ? 
+                            '<span class="live-indicator"></span> Real-time live data' :
+                            '<span class="paused-indicator"></span> Market closed - Last available data'
+                        }
                     </div>
                 </div>
             `;
         }
 
-        function openGroww(indexName, signal, strikePrice, premium, lots, lotSize) {
+        function openGroww(indexName, signal, strikePrice, premium, lots, lotSize, isOpen) {
+            if (!isOpen) {
+                alert('⚠️ Market is currently closed!\n\nTrading hours: 9:15 AM - 3:30 PM IST (Monday - Friday)\n\nPlease try again during market hours.');
+                return;
+            }
+            
             const totalCost = premium * lots * lotSize;
             
             alert(`🎯 TRADE DETAILS
@@ -736,31 +1078,78 @@ Opening Groww...`);
             window.open('https://groww.in/stocks/stock-futures-options', '_blank');
         }
 
-        function checkMarketHours() {
-            const now = new Date();
-            const hours = now.getHours();
-            const minutes = now.getMinutes();
-            const day = now.getDay();
-            
-            const isWeekday = day >= 1 && day <= 5;
-            const isMarketHours = (hours === 9 && minutes >= 15) || 
-                                  (hours > 9 && hours < 15) || 
-                                  (hours === 15 && minutes <= 30);
-            
-            return isWeekday && isMarketHours;
+        function updateClock() {
+            const istTime = getISTTime();
+            document.getElementById('currentTime').textContent = 
+                istTime.toLocaleTimeString('en-IN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: false 
+                });
         }
 
-        function updateDashboard() {
-            const marketData = generateLiveMarketData();
-            const mainContent = document.getElementById('mainContent');
+        async function updateDashboard() {
+            const marketInfo = checkMarketHours();
+            isMarketOpen = marketInfo.isOpen;
             
+            // Update market status
+            const marketStatus = document.getElementById('marketStatus');
+            if (marketInfo.isOpen) {
+                marketStatus.innerHTML = '🟢 OPEN';
+                marketStatus.style.color = '#10b981';
+                document.getElementById('headerStatus').innerHTML = 
+                    '<span class="live-indicator"></span>Live Market Data - Trading Active';
+            } else {
+                marketStatus.innerHTML = '🔴 CLOSED';
+                marketStatus.style.color = '#ef4444';
+                document.getElementById('headerStatus').innerHTML = 
+                    '<span class="paused-indicator"></span>Market Closed';
+            }
+            
+            displayMarketClosedNotice(marketInfo);
+            
+            const autoRefresh = document.getElementById('autoRefresh');
+            if (marketInfo.isOpen) {
+                autoRefresh.innerHTML = '🔄 30s';
+                autoRefresh.classList.add('blink');
+            } else {
+                autoRefresh.innerHTML = '⏸️ Paused';
+                autoRefresh.classList.remove('blink');
+            }
+
+            // Fetch real market data
+            const marketData = await fetchRealMarketData();
+            
+            if (!marketData) {
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="loading">
+                        <p style="color: #ef4444;">⚠️ Unable to fetch live market data</p>
+                        <p style="font-size: 0.9em; margin-top: 10px;">
+                            This could be due to:<br>
+                            • CORS restrictions<br>
+                            • API rate limits<br>
+                            • Network issues<br><br>
+                            Retrying in 30 seconds...
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            const mainContent = document.getElementById('mainContent');
             let html = '';
             let totalStrength = 0;
             let signalCount = 0;
             
             ['NIFTY', 'BANKNIFTY', 'SENSEX'].forEach(indexName => {
                 if (marketData[indexName]) {
-                    html += renderIndexCard(indexName, marketData[indexName]);
+                    // Store in historical data
+                    historicalData[indexName].push(marketData[indexName].price);
+                    if (historicalData[indexName].length > 100) {
+                        historicalData[indexName].shift();
+                    }
+                    
+                    html += renderIndexCard(indexName, marketData[indexName], marketInfo);
                     const analysis = generateTradingSignal(marketData[indexName], indexName);
                     totalStrength += analysis.strength;
                     signalCount++;
@@ -769,21 +1158,16 @@ Opening Groww...`);
             
             mainContent.innerHTML = html;
             
-            // Update status bar
             const avgStrength = signalCount > 0 ? (totalStrength / signalCount).toFixed(0) : 0;
             document.getElementById('signalStrength').textContent = `${avgStrength}%`;
             
-            // Check market hours
-            const isMarketOpen = checkMarketHours();
-            const marketStatus = document.getElementById('marketStatus');
-            marketStatus.textContent = isMarketOpen ? '🟢 OPEN' : '🔴 CLOSED';
-            marketStatus.style.color = isMarketOpen ? '#10b981' : '#ef4444';
-            
-            // Update last update time
-            const now = new Date();
+            const now = getISTTime();
             document.getElementById('lastUpdate').innerHTML = `
-                <span class="live-indicator"></span>
-                Updated: ${now.toLocaleTimeString('en-IN', { 
+                ${marketInfo.isOpen ? 
+                    '<span class="live-indicator"></span>' :
+                    '<span class="paused-indicator"></span>'
+                }
+                ${marketInfo.isOpen ? 'Updated' : 'Last updated'}: ${now.toLocaleTimeString('en-IN', { 
                     hour: '2-digit', 
                     minute: '2-digit', 
                     second: '2-digit',
@@ -792,16 +1176,31 @@ Opening Groww...`);
             `;
         }
 
-        // Initialize immediately
-        let refreshTimer;
-        
-        // Start immediately
+        // Initialize
         updateDashboard();
+        updateClock();
         
-        // Set up auto-refresh
-        refreshTimer = setInterval(updateDashboard, CONFIG.refreshInterval);
+        setInterval(updateClock, 1000);
         
-        // Cleanup
+        function smartRefresh() {
+            const marketInfo = checkMarketHours();
+            
+            if (marketInfo.isOpen) {
+                if (refreshTimer) clearInterval(refreshTimer);
+                refreshTimer = setInterval(updateDashboard, CONFIG.refreshInterval);
+                updateDashboard();
+            } else {
+                if (refreshTimer) {
+                    clearInterval(refreshTimer);
+                    refreshTimer = null;
+                }
+                updateDashboard();
+            }
+        }
+        
+        smartRefresh();
+        setInterval(smartRefresh, 60000);
+        
         window.addEventListener('beforeunload', () => {
             if (refreshTimer) clearInterval(refreshTimer);
         });
